@@ -1,9 +1,10 @@
 /**
  * Cliente HTTP da custo3d-api. Envia o token da sessão em toda requisição e,
  * se a API responder 401, apaga a sessão e avisa o AuthProvider.
- * Em desenvolvimento usa "/api" (proxy do Vite); em produção, VITE_API_URL.
+ * Em desenvolvimento usa "/api" (proxy do Vite); em produção, API_URL.
  */
-const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+// Remove barra final: "https://api.com/" + "/auth/login" viraria "//auth/login" e a chamada falharia.
+const BASE_URL = (import.meta.env.API_URL || "/api").replace(/\/+$/, "");
 const SESSION_KEY = "sessao";
 
 export const AUTH_LOGOUT_EVENT = "auth:logout";

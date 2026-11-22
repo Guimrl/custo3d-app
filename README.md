@@ -38,7 +38,7 @@ React 19 + TypeScript + Vite, com componentes do [Material UI](https://mui.com/m
 ## Deploy (Vercel)
 
 O workflow `.github/workflows/deploy-vercel.yml` publica em produção quando um PR de `dev` é mergeado na `main`.
-Configure no GitHub os secrets `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` e `VERCEL_TOKEN`, e no projeto da Vercel a variável `VITE_API_URL` com o endereço da API (veja `.env.example`).
+Configure no GitHub os secrets `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` e `VERCEL_TOKEN`, e no projeto da Vercel a variável `API_URL` com o endereço da API (veja `.env.example`).
 O `vercel.json` faz todas as rotas caírem no `index.html` (necessário para o roteamento do React).
 
 ## Autor
