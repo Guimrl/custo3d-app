@@ -27,7 +27,7 @@ import { RowActions } from "../components/RowActions";
 import { matches, uniqueSorted, useFilters } from "../hooks/useFilters";
 import { useResource } from "../hooks/useResource";
 import { equipmentHourlyCost } from "../lib/calc";
-import { money } from "../lib/format";
+import { date, money, today } from "../lib/format";
 import type { EquipmentDoc, EquipmentType } from "../lib/types";
 
 /** Só impressora tem "manutenção por hora". */
@@ -58,6 +58,7 @@ const fieldsFor = (type: EquipmentType): FieldDef[] => [
   ...(type === "printer"
     ? [{ name: "maintenancePerHour", label: "Manutenção", type: "number", suffix: "R$/h", help: "Bicos, correias, PEI… por hora." } satisfies FieldDef]
     : []),
+  { name: "purchaseDate", label: "Data da compra", type: "date" },
   { name: "active", label: "Em uso", type: "switch" },
   {
     name: "photoUrl",
@@ -77,6 +78,7 @@ const blankFor = (type: EquipmentType): FormValues => ({
   lifespanHours: type === "printer" ? 5000 : 3000,
   powerWatts: type === "printer" ? 120 : 50,
   maintenancePerHour: 0,
+  purchaseDate: today(),
   active: true,
 });
 
@@ -206,7 +208,9 @@ export const Equipment = () => {
                                   {equipment.name}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                                  {equipment.brand}
+                                  {[equipment.brand, equipment.purchaseDate && `Comprada em ${date(equipment.purchaseDate)}`]
+                                    .filter(Boolean)
+                                    .join(" · ")}
                                 </Typography>
                               </Box>
                               {equipment.active === false && <Chip label="inativo" size="small" />}

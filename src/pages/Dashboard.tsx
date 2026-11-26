@@ -129,9 +129,9 @@ export const Dashboard = () => {
             detail={`${decimal(summary.printHours, 1)} h · ${grams(summary.gramsUsed)}`}
           />
           <Kpi
-            label="Lucro registrado"
+            label="Lucro das vendas"
             value={money(summary.profit)}
-            detail={`Vendas ${money(summary.revenue)} · custo ${money(summary.cost)}`}
+            detail={`${summary.printsSold ?? 0} vendidas · ${money(summary.revenue)} · custo ${money(summary.cost)}`}
             color={summary.profit < 0 ? "error.main" : "success.main"}
           />
         </FieldGrid>

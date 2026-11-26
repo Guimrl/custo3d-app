@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { errorMessage } from "../api";
+import { toInputDate } from "../lib/format";
 import { NumberField } from "./common";
 import { toOption, type Option } from "./FilterBar";
 
@@ -29,7 +30,8 @@ export interface FieldDef {
   name: string;
   label: string;
   type?: "text" | "number" | "date" | "select" | "textarea" | "switch";
-  options?: (string | Option)[];
+  /** Opções do select. Pode depender dos outros campos (ex.: materiais da marca escolhida). */
+  options?: (string | Option)[] | ((values: FormValues) => (string | Option)[]);
   /** Sugestões de texto livre (ex.: marcas e categorias já usadas). */
   suggestions?: string[];
   suffix?: string;
@@ -38,7 +40,7 @@ export interface FieldDef {
   required?: boolean;
   /** Ocupa a linha inteira. */
   full?: boolean;
-  /** Campo personalizado (foto, cores, acabamentos…). */
+  /** Campo personalizado (foto, cores, materiais da marca…). */
   render?: (values: FormValues, setValue: SetValue) => ReactNode;
 }
 
@@ -123,14 +125,14 @@ const Field = ({
       multiline={field.type === "textarea"}
       minRows={field.type === "textarea" ? 3 : undefined}
       label={field.label}
-      value={field.type === "date" ? String(value ?? "").slice(0, 10) : (value ?? "")}
+      value={field.type === "date" ? toInputDate(value) : (value ?? "")}
       onChange={(event) => setValue(field.name, event.target.value)}
       placeholder={field.placeholder}
       helperText={field.help}
       required={field.required}
       slotProps={field.type === "date" ? { inputLabel: { shrink: true } } : undefined}
     >
-      {(field.options ?? []).map(toOption).map((option) => (
+      {(typeof field.options === "function" ? field.options(values) : (field.options ?? [])).map(toOption).map((option) => (
         <MenuItem key={option.value} value={option.value}>
           {option.label}
         </MenuItem>

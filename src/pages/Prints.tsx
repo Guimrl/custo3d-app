@@ -3,6 +3,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
+import UndoOutlinedIcon from "@mui/icons-material/UndoOutlined";
 import {
   Alert,
   Box,
@@ -31,8 +33,16 @@ import { Photo } from "../components/Photo";
 import { RowActions } from "../components/RowActions";
 import { matches, uniqueSorted, useFilters } from "../hooks/useFilters";
 import { useResource } from "../hooks/useResource";
-import { date, grams, hours, money, percent } from "../lib/format";
+import { date, grams, hours, money, percent, today } from "../lib/format";
 import type { PrintDoc } from "../lib/types";
+
+const SALE_OPTIONS = [
+  { value: "sold", label: "Vendidas" },
+  { value: "unsold", label: "Não vendidas" },
+];
+
+/** Data do orçamento; impressões antigas sem ela usam a data de cadastro. */
+const quoteDateOf = (print: PrintDoc) => print.quotedAt ?? print.createdAt;
 
 const PERIODS = [
   { value: "7", label: "Últimos 7 dias" },
@@ -63,7 +73,7 @@ const periodStart = (period: string): Date | null => {
 
 export const Prints = () => {
   const [filters, setFilters] = useFilters(
-    { search: "", status: "", customer: "", period: "", filament: "" },
+    { search: "", status: "", sale: "", customer: "", period: "", filament: "" },
     "filtros-impressoes",
   );
   // O status a API já filtra; o resto é filtrado aqui.
@@ -86,9 +96,32 @@ export const Prints = () => {
         matches([print.name, print.customer, print.notes, ...print.filaments.map((filament) => filament.label)].join(" "), filters.search) &&
         (!filters.customer || print.customer === filters.customer) &&
         (!filters.filament || print.filaments.some((filament) => filament.label === filters.filament)) &&
-        (!since || (print.createdAt !== undefined && new Date(print.createdAt) >= since)),
+        (!filters.sale || (filters.sale === "sold") === Boolean(print.soldAt)) &&
+        (!since || (quoteDateOf(print) !== undefined && new Date(quoteDateOf(print)!) >= since)),
     );
   }, [items, filters]);
+
+  /** Atalho "Vendi": marca a venda com a data de hoje (dá para ajustar abrindo a impressão). */
+  const markSold = async (print: PrintDoc) => {
+    await api.post<PrintDoc>(`/prints/${print.id}/sale`, { soldAt: today() });
+    notify(`"${print.name}" marcada como vendida hoje.`, "success");
+    await reload();
+  };
+
+  const undoSale = async (print: PrintDoc) => {
+    const confirmed = await confirm({
+      title: `Desfazer a venda de "${print.name}"?`,
+      message: "A data de venda é apagada e o lote deixa de contar como vendido no Painel.",
+      confirmLabel: "Desfazer venda",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    await api.delete(`/prints/${print.id}/sale`);
+    await reload();
+  };
 
   const complete = async (print: PrintDoc) => {
     const confirmed = await confirm({
@@ -140,6 +173,8 @@ export const Prints = () => {
       id: undefined,
       name: `${print.name} (cópia)`,
       status: "orcamento",
+      quotedAt: today(),
+      soldAt: null,
     });
     navigate(`/calcular/${copy.id}`);
   };
@@ -162,6 +197,7 @@ export const Prints = () => {
         placeholder="Buscar peça, cliente, filamento…"
         selects={[
           { key: "status", label: "Status", value: filters.status, options: STATUS },
+          { key: "sale", label: "Venda", value: filters.sale, options: SALE_OPTIONS },
           { key: "customer", label: "Cliente", value: filters.customer, options: customers },
           { key: "period", label: "Período", value: filters.period, options: PERIODS },
           { key: "filament", label: "Filamento", value: filters.filament, options: filamentLabels },
@@ -212,18 +248,23 @@ export const Prints = () => {
                             {print.name}
                           </Link>
                           <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>
-                            {[print.customer, date(print.createdAt)].filter(Boolean).join(" · ")}
+                            {[print.customer, `Orçamento ${date(quoteDateOf(print))}`].filter(Boolean).join(" · ")}
                           </Typography>
                         </Box>
                       </Stack>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={isDone ? "Impressa" : "Orçamento"}
-                        color={isDone ? "success" : "default"}
-                        variant={isDone ? "filled" : "outlined"}
-                      />
+                      <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
+                        <Chip
+                          size="small"
+                          label={isDone ? "Impressa" : "Orçamento"}
+                          color={isDone ? "success" : "default"}
+                          variant={isDone ? "filled" : "outlined"}
+                        />
+                        {print.soldAt && (
+                          <Chip size="small" color="primary" icon={<SellOutlinedIcon />} label={`Vendida ${date(print.soldAt)}`} />
+                        )}
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
@@ -246,6 +287,9 @@ export const Prints = () => {
                       <RowActions
                         actions={[
                           ...(isDone ? [] : [{ label: "Imprimi! Dar baixa", icon: <CheckIcon fontSize="small" />, onClick: () => complete(print) }]),
+                          print.soldAt
+                            ? { label: "Desfazer venda", icon: <UndoOutlinedIcon fontSize="small" />, onClick: () => undoSale(print) }
+                            : { label: "Vendi", icon: <SellOutlinedIcon fontSize="small" />, onClick: () => markSold(print) },
                           { label: "Abrir", icon: <EditOutlinedIcon fontSize="small" />, onClick: () => navigate(`/calcular/${print.id}`) },
                           { label: "Duplicar", icon: <ContentCopyOutlinedIcon fontSize="small" />, onClick: () => duplicate(print) },
                           { label: "Excluir", icon: <DeleteOutlineIcon fontSize="small" />, danger: true, onClick: () => remove(print) },

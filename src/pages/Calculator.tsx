@@ -24,7 +24,7 @@ import { PageHeader } from "../components/PageHeader";
 import { PhotoField } from "../components/Photo";
 import { PricingPanel } from "../components/PricingPanel";
 import { calculateCost, spoolPricePerGram, supplyUnitCost } from "../lib/calc";
-import { grams, money, percent } from "../lib/format";
+import { grams, money, percent, toInputDate, today } from "../lib/format";
 import type {
   EquipmentDoc,
   PrintDoc,
@@ -59,6 +59,8 @@ const BLANK_FORM: FormState = {
   supplies: [],
   salePrice: "",
   photoUrl: "",
+  quotedAt: "",
+  soldAt: "",
   notes: "",
 };
 
@@ -118,11 +120,14 @@ export const Calculator = () => {
             printerId: print.printerId || "",
             dryerId: print.dryerId || "",
             salePrice: print.salePrice || "",
+            // Impressões antigas sem data de orçamento usam a data de cadastro.
+            quotedAt: toInputDate(print.quotedAt ?? print.createdAt),
+            soldAt: toInputDate(print.soldAt),
           });
         } else {
-          // Impressão nova: já seleciona a primeira impressora ativa.
+          // Impressão nova: já seleciona a primeira impressora ativa; orçamento com a data de hoje.
           const printer = equipment.find((item) => item.type === "printer" && item.active !== false);
-          setForm({ ...BLANK_FORM, printerId: printer?.id || "" });
+          setForm({ ...BLANK_FORM, printerId: printer?.id || "", quotedAt: today() });
         }
         setError("");
       } catch (caught) {
@@ -188,7 +193,12 @@ export const Calculator = () => {
 
     setSaving(true);
     try {
-      const body = { ...form, status: complete || isDone ? "concluida" : "orcamento" };
+      const body = {
+        ...form,
+        status: complete || isDone ? "concluida" : "orcamento",
+        // Data de venda vazia = ainda não vendido (null limpa uma venda marcada antes).
+        soldAt: form.soldAt || null,
+      };
       const saved = id
         ? await api.put<PrintDoc>(`/prints/${id}`, body)
         : await api.post<PrintDoc>("/prints", body);
@@ -270,6 +280,21 @@ export const Calculator = () => {
                 value={form.quantity}
                 onChange={(value) => setField("quantity", Number(value) || 0)}
                 helperText="Quantas peças saem desta impressão"
+              />
+              <TextField
+                type="date"
+                label="Data do orçamento"
+                value={form.quotedAt ?? ""}
+                onChange={(event) => setField("quotedAt", event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                type="date"
+                label="Data da venda"
+                value={form.soldAt ?? ""}
+                onChange={(event) => setField("soldAt", event.target.value)}
+                helperText="Deixe vazio enquanto não vender"
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </FieldGrid>
           </Section>
