@@ -4,6 +4,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import SellOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import SpaceDashboardOutlinedIcon from "@mui/icons-material/SpaceDashboardOutlined";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
@@ -29,6 +30,7 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthProvider";
 import { Loading } from "./components/common";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { Brands } from "./pages/Brands";
 import { Calculator } from "./pages/Calculator";
 import { Dashboard } from "./pages/Dashboard";
 import { Equipment } from "./pages/Equipment";
@@ -53,6 +55,7 @@ const PAGES: Page[] = [
   { path: "/calcular", label: "Nova impressão", icon: <CalculateOutlinedIcon />, element: <Calculator /> },
   { path: "/impressoes", label: "Impressões", icon: <ReceiptLongOutlinedIcon />, element: <Prints /> },
   { path: "/carreteis", label: "Carretéis", icon: <WidgetsOutlinedIcon />, element: <Spools /> },
+  { path: "/marcas", label: "Marcas", icon: <SellOutlinedIcon />, element: <Brands /> },
   { path: "/materiais", label: "Outros materiais", icon: <Inventory2OutlinedIcon />, element: <Supplies /> },
   { path: "/equipamentos", label: "Equipamentos", icon: <PrintOutlinedIcon />, element: <Equipment /> },
   { path: "/configuracoes", label: "Configurações", icon: <SettingsOutlinedIcon />, element: <Settings /> },

@@ -7,7 +7,6 @@ import ScaleOutlinedIcon from "@mui/icons-material/ScaleOutlined";
 import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardActions,
@@ -23,7 +22,6 @@ import { colorsOf, ColorSwatch } from "../components/ColorSwatch";
 import { EmptyState, FieldGrid, StockBar } from "../components/common";
 import { useFeedback } from "../components/FeedbackProvider";
 import { FilterBar } from "../components/FilterBar";
-import { finishName, FinishPicker, FinishTags, useFinishes } from "../components/Finishes";
 import { FormDialog, type FieldDef, type FormValues } from "../components/FormDialog";
 import { PageHeader } from "../components/PageHeader";
 import { Photo, PhotoField } from "../components/Photo";
@@ -32,66 +30,82 @@ import { matches, uniqueSorted, useFilters } from "../hooks/useFilters";
 import { useResource } from "../hooks/useResource";
 import { spoolPricePerGram } from "../lib/calc";
 import { date, grams, money, today } from "../lib/format";
-import type { ColorMode, FinishDoc, Settings, SpoolDoc } from "../lib/types";
+import { materialsOf, typesOf, withCurrent } from "../lib/materials";
+import type { BrandDoc, ColorMode, Settings, SpoolDoc } from "../lib/types";
 
-const MATERIALS = ["PLA", "PLA+", "PETG", "ABS", "ASA", "TPU", "Nylon", "PC", "Resina", "Outro"];
+const fieldsFor = (brands: BrandDoc[]): FieldDef[] => {
+  const brandOf = (values: FormValues) => brands.find((brand) => brand.id === values.brandId);
 
-const fieldsFor = (finishes: FinishDoc[], materials: string[], brands: string[]): FieldDef[] => [
-  // Lista padrão + materiais que já existem nos carretéis.
-  { name: "material", label: "Material", type: "select", options: uniqueSorted([...MATERIALS, ...materials]) },
-  { name: "brand", label: "Marca", suggestions: brands, placeholder: "Ex.: Voolt3D, 3D Fila…" },
-  { name: "color", label: "Nome da cor", required: true, placeholder: "Ex.: Preto, Azul + Roxo" },
-  {
-    name: "colors",
-    label: "Cores (amostra)",
-    help: "Duo Color, Tri Color, Rainbow? Adicione cores e escolha faixas ou degradê.",
-    render: (values, setValue) => (
-      <ColorsField
-        colors={colorsOf(values)}
-        mode={(values.colorMode as ColorMode) || "solid"}
-        onChange={(colors, mode) => {
-          setValue("colors", colors);
-          setValue("colorMode", mode);
-        }}
-      />
-    ),
-  },
-  {
-    name: "finishIds",
-    label: "Acabamentos",
-    full: true,
-    render: (values, setValue) => (
-      <FinishPicker
-        finishes={finishes}
-        value={values.finishIds ?? []}
-        onChange={(ids) => setValue("finishIds", ids)}
-      />
-    ),
-  },
-  { name: "pricePaid", label: "Preço pago", type: "number", suffix: "R$", required: true },
-  { name: "weightGrams", label: "Peso líquido", type: "number", suffix: "g", help: "Filamento que veio no carretel" },
-  { name: "remainingGrams", label: "Quanto resta", type: "number", suffix: "g" },
-  { name: "emptySpoolGrams", label: "Carretel vazio (tara)", type: "number", suffix: "g", help: "Para conferir pesando na balança" },
-  { name: "diameter", label: "Diâmetro", type: "number", suffix: "mm" },
-  { name: "purchaseDate", label: "Data da compra", type: "date" },
-  { name: "supplier", label: "Onde comprou", full: true },
-  {
-    name: "photoUrl",
-    label: "Foto",
-    full: true,
-    render: (values, setValue) => (
-      <PhotoField value={values.photoUrl} onChange={(url) => setValue("photoUrl", url)} />
-    ),
-  },
-  { name: "notes", label: "Observações", type: "textarea", full: true },
-];
+  return [
+    {
+      name: "brandId",
+      label: "Marca",
+      type: "select",
+      help: "Cadastre marcas, materiais e tipos em Marcas.",
+      options: (values) => [
+        // Carretel antigo sem marca ligada: mostra o nome que ele já tinha.
+        { value: "", label: values.brand && !values.brandId ? `${values.brand} (sem cadastro)` : "Sem marca" },
+        ...brands.map((brand) => ({ value: brand.id, label: brand.name })),
+      ],
+    },
+    {
+      name: "material",
+      label: "Material",
+      type: "select",
+      options: (values) => withCurrent(materialsOf(brandOf(values)), values.material),
+    },
+    {
+      name: "materialType",
+      label: "Tipo",
+      type: "select",
+      help: "Lite, Silk, Rainbow… vêm do cadastro da marca.",
+      options: (values) => [
+        { value: "", label: "Sem tipo" },
+        ...withCurrent(typesOf(brandOf(values), values.material), values.materialType),
+      ],
+    },
+    { name: "color", label: "Nome da cor", required: true, placeholder: "Ex.: Preto, Azul + Roxo" },
+    {
+      name: "colors",
+      label: "Cores (amostra)",
+      help: "Duo Color, Tri Color, Rainbow? Adicione cores e escolha faixas ou degradê.",
+      render: (values, setValue) => (
+        <ColorsField
+          colors={colorsOf(values)}
+          mode={(values.colorMode as ColorMode) || "solid"}
+          onChange={(colors, mode) => {
+            setValue("colors", colors);
+            setValue("colorMode", mode);
+          }}
+        />
+      ),
+    },
+    { name: "pricePaid", label: "Preço pago", type: "number", suffix: "R$", required: true },
+    { name: "weightGrams", label: "Peso líquido", type: "number", suffix: "g", help: "Filamento que veio no carretel" },
+    { name: "remainingGrams", label: "Quanto resta", type: "number", suffix: "g" },
+    { name: "emptySpoolGrams", label: "Carretel vazio (tara)", type: "number", suffix: "g", help: "Vazio = usa a tara da marca" },
+    { name: "diameter", label: "Diâmetro", type: "number", suffix: "mm" },
+    { name: "purchaseDate", label: "Data da compra", type: "date" },
+    { name: "supplier", label: "Onde comprou", full: true },
+    {
+      name: "photoUrl",
+      label: "Foto",
+      full: true,
+      render: (values, setValue) => (
+        <PhotoField value={values.photoUrl} onChange={(url) => setValue("photoUrl", url)} />
+      ),
+    },
+    { name: "notes", label: "Observações", type: "textarea", full: true },
+  ];
+};
 
 const blankSpool = (): FormValues => ({
+  brandId: "",
   material: "PLA",
+  materialType: "",
   color: "",
   colors: ["#3b82f6"],
   colorMode: "solid",
-  finishIds: [],
   weightGrams: 1000,
   remainingGrams: 1000,
   emptySpoolGrams: 0,
@@ -126,17 +140,21 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
 
 export const Spools = () => {
   const [filters, setFilters] = useFilters(
-    { search: "", brand: "", material: "", color: "", finish: "", low: false, archived: false },
+    { search: "", brand: "", material: "", materialType: "", color: "", low: false, archived: false },
     "filtros-carreteis",
   );
   const { items, loading, error, reload } = useResource<SpoolDoc>(
     `/spools${filters.archived ? "?all=true" : ""}`,
   );
-  const { items: finishes } = useFinishes();
+  const { items: brandList } = useResource<BrandDoc>("/brands");
   const { confirm } = useFeedback();
   const [lowStockGrams, setLowStockGrams] = useState(150);
   const [editing, setEditing] = useState<FormValues | null>(null);
   const [weighing, setWeighing] = useState<SpoolDoc | null>(null);
+
+  /** Tara do carretel; sem ela, a da marca (o campo continua editável na pesagem). */
+  const emptySpoolOf = (spool: SpoolDoc) =>
+    spool.emptySpoolGrams || brandList.find((brand) => brand.id === spool.brandId)?.emptySpoolGrams || 0;
 
   useEffect(() => {
     api
@@ -147,23 +165,22 @@ export const Spools = () => {
 
   const brands = uniqueSorted(items.map((spool) => spool.brand));
   const materials = uniqueSorted(items.map((spool) => spool.material));
+  const materialTypes = uniqueSorted(items.map((spool) => spool.materialType));
   const colorNames = uniqueSorted(items.map((spool) => spool.color));
 
   const visible = useMemo(
     () =>
       items.filter((spool) => {
-        const finishNames = (spool.finishIds ?? []).map((id) => finishName(finishes, id)).join(" ");
-
         return (
-          matches([spool.material, spool.color, spool.brand, spool.supplier, spool.notes, finishNames].join(" "), filters.search) &&
+          matches([spool.material, spool.materialType, spool.color, spool.brand, spool.supplier, spool.notes].join(" "), filters.search) &&
           (!filters.brand || spool.brand === filters.brand) &&
           (!filters.material || spool.material === filters.material) &&
+          (!filters.materialType || spool.materialType === filters.materialType) &&
           (!filters.color || spool.color === filters.color) &&
-          (!filters.finish || (spool.finishIds ?? []).includes(filters.finish)) &&
           (!filters.low || spool.remainingGrams <= lowStockGrams)
         );
       }),
-    [items, finishes, filters, lowStockGrams],
+    [items, filters, lowStockGrams],
   );
 
   const totalGrams = visible
@@ -213,7 +230,7 @@ export const Spools = () => {
   };
 
   const openEdit = (spool: SpoolDoc) =>
-    setEditing({ ...spool, colors: colorsOf(spool), finishIds: spool.finishIds ?? [] });
+    setEditing({ ...spool, brandId: spool.brandId ?? "", materialType: spool.materialType ?? "", colors: colorsOf(spool) });
 
   const filterChip = (key: "low" | "archived", label: string) => (
     <Chip
@@ -239,12 +256,12 @@ export const Spools = () => {
       <FilterBar
         search={filters.search}
         onSearch={(search) => setFilters({ search })}
-        placeholder="Buscar cor, marca, material, acabamento…"
+        placeholder="Buscar cor, marca, material, tipo…"
         selects={[
           { key: "brand", label: "Marca", value: filters.brand, options: brands },
           { key: "material", label: "Material", value: filters.material, options: materials },
+          { key: "materialType", label: "Tipo", value: filters.materialType, options: materialTypes },
           { key: "color", label: "Cor", value: filters.color, options: colorNames },
-          { key: "finish", label: "Acabamento", value: filters.finish, options: finishes.map((finish) => ({ value: finish.id, label: finish.name })) },
         ]}
         onSelect={(key, value) => setFilters({ [key]: value })}
         extra={
@@ -276,15 +293,12 @@ export const Spools = () => {
                 <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                   <ColorSwatch item={spool} size={14} />
                   <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
-                    {spool.material} · {spool.color}
+                    {[spool.material, spool.materialType].filter(Boolean).join(" ")} · {spool.color}
                   </Typography>
                 </Stack>
-                <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                <Typography variant="caption" component="p" sx={{ color: "text.secondary", mb: 1 }}>
                   {[spool.brand, spool.diameter && `${spool.diameter} mm`].filter(Boolean).join(" · ")}
                 </Typography>
-                <Box sx={{ my: 1 }}>
-                  <FinishTags finishes={finishes} ids={spool.finishIds} />
-                </Box>
                 <StockBar value={spool.remainingGrams} max={spool.weightGrams} color={colorsOf(spool)[0]} />
                 <InfoRow label="Resta" value={`${grams(spool.remainingGrams)} de ${grams(spool.weightGrams)}`} />
                 <InfoRow label="Pago" value={`${money(spool.pricePaid)} · ${money(pricePerGram * 1000)}/kg`} />
@@ -316,7 +330,7 @@ export const Spools = () => {
       {editing && (
         <FormDialog
           title={editing.id ? "Editar carretel" : "Novo carretel"}
-          fields={fieldsFor(finishes, materials, brands)}
+          fields={fieldsFor(brandList)}
           initial={editing}
           onSubmit={save}
           onClose={() => setEditing(null)}
@@ -327,7 +341,7 @@ export const Spools = () => {
         <FormDialog
           title={`Ajustar estoque: ${weighing.material} ${weighing.color}`}
           fields={WEIGH_FIELDS}
-          initial={{ scaleGrams: "", emptySpoolGrams: weighing.emptySpoolGrams || 0, remainingGrams: weighing.remainingGrams }}
+          initial={{ scaleGrams: "", emptySpoolGrams: emptySpoolOf(weighing), remainingGrams: weighing.remainingGrams }}
           onSubmit={saveWeight}
           onClose={() => setWeighing(null)}
         >

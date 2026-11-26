@@ -2,12 +2,17 @@ import AddIcon from "@mui/icons-material/Add";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import HistoryIcon from "@mui/icons-material/History";
 import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   Table,
   TableBody,
@@ -29,7 +34,7 @@ import { RowActions } from "../components/RowActions";
 import { matches, uniqueSorted, useFilters } from "../hooks/useFilters";
 import { useResource } from "../hooks/useResource";
 import { supplyUnitCost } from "../lib/calc";
-import { decimal, money } from "../lib/format";
+import { date, decimal, money, today } from "../lib/format";
 import type { SupplyDoc } from "../lib/types";
 
 /** "Acabando": restam 10% ou menos do que foi comprado (mesmo critério do Painel). */
@@ -72,7 +77,57 @@ const fieldsFor = (categories: string[]): FieldDef[] => [
 const RESTOCK_FIELDS = (unit: string): FieldDef[] => [
   { name: "quantity", label: `Quantidade comprada (${unit})`, type: "number", required: true },
   { name: "price", label: "Valor pago", type: "number", suffix: "R$", required: true },
+  { name: "date", label: "Data da compra", type: "date", required: true },
 ];
+
+/** Compras do mais recente para o mais antigo. */
+const purchasesOf = (supply: SupplyDoc) =>
+  [...(supply.purchases ?? [])].sort((first, second) => second.date.localeCompare(first.date));
+
+/** Histórico de compras de um material: cadastro e reposições. */
+const PurchaseHistoryDialog = ({ supply, onClose }: { supply: SupplyDoc; onClose: () => void }) => {
+  const purchases = purchasesOf(supply);
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Compras: {supply.name}</DialogTitle>
+      <DialogContent>
+        {!purchases.length ? (
+          <EmptyState>Nenhuma compra registrada.</EmptyState>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Data</TableCell>
+                <TableCell align="right">Quantidade</TableCell>
+                <TableCell align="right">Valor pago</TableCell>
+                <TableCell align="right">Por {supply.unit}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {purchases.map((purchase, index) => (
+                <TableRow key={`${purchase.date}-${index}`}>
+                  <TableCell>{date(purchase.date)}</TableCell>
+                  <TableCell align="right">
+                    {decimal(purchase.quantity)} {supply.unit}
+                  </TableCell>
+                  <TableCell align="right">{money(purchase.price)}</TableCell>
+                  <TableCell align="right">{purchase.quantity > 0 ? money(purchase.price / purchase.quantity) : "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <Typography variant="caption" sx={{ display: "block", mt: 2, color: "text.secondary" }}>
+          Compras feitas antes do histórico existir aparecem somadas numa compra só, na data de cadastro.
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose}>Fechar</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 export const Supplies = () => {
   const [filters, setFilters] = useFilters(
@@ -85,6 +140,7 @@ export const Supplies = () => {
   const { confirm } = useFeedback();
   const [editing, setEditing] = useState<FormValues | null>(null);
   const [restocking, setRestocking] = useState<SupplyDoc | null>(null);
+  const [viewingHistory, setViewingHistory] = useState<SupplyDoc | null>(null);
 
   const categories = uniqueSorted([...DEFAULT_CATEGORIES, ...items.map((supply) => supply.category)]);
 
@@ -145,7 +201,7 @@ export const Supplies = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setEditing({ unit: "un", category: "", quantityPurchased: "", pricePaid: "" })}
+            onClick={() => setEditing({ unit: "un", category: "", quantityPurchased: "", pricePaid: "", purchaseDate: today() })}
           >
             Novo material
           </Button>
@@ -215,7 +271,12 @@ export const Supplies = () => {
                               {supply.name}
                             </Typography>
                             <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                              {supply.supplier}
+                              {[
+                                supply.supplier,
+                                purchasesOf(supply)[0] && `Última compra ${date(purchasesOf(supply)[0].date)}`,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </Typography>
                           </Box>
                           {supply.archived && <Chip label="arquivado" size="small" />}
@@ -235,6 +296,7 @@ export const Supplies = () => {
                         <RowActions
                           actions={[
                             { label: "Repor", icon: <AddIcon fontSize="small" />, onClick: () => setRestocking(supply) },
+                            { label: "Histórico de compras", icon: <HistoryIcon fontSize="small" />, onClick: () => setViewingHistory(supply) },
                             { label: "Editar", icon: <EditOutlinedIcon fontSize="small" />, onClick: () => setEditing(supply) },
                             {
                               label: supply.archived ? "Reativar" : "Arquivar",
@@ -276,7 +338,7 @@ export const Supplies = () => {
         <FormDialog
           title={`Repor estoque: ${restocking.name}`}
           fields={RESTOCK_FIELDS(restocking.unit)}
-          initial={{ quantity: "", price: "" }}
+          initial={{ quantity: "", price: "", date: today() }}
           onSubmit={restock}
           onClose={() => setRestocking(null)}
         >
@@ -287,6 +349,8 @@ export const Supplies = () => {
           )}
         </FormDialog>
       )}
+
+      {viewingHistory && <PurchaseHistoryDialog supply={viewingHistory} onClose={() => setViewingHistory(null)} />}
     </>
   );
 };
